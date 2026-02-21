@@ -1,0 +1,46 @@
+Tzu En (Oscar) Huang
+oscartzuenhuang@gmail.com| (929) 429-0450 | linkedin.com/in/tzuenoscar-huang | U.S. Permanent Resident
+
+Data Engineer with experience building and optimizing scalable ETL pipelines and data models. Proven ability to transform large, complex datasets into high-quality data assets that power analytics and machine learning applications
+
+TECHNICAL SKILLS
+Languages & Tools: SQL, Python (Pandas, NumPy), R, Snowflake, Spark, Hadoop, dbt, AWS S3, Tableau
+Pipeline Development & ETL: ETL/ELT Design, Data Modeling, Data Validation, Performance Tuning
+
+PROFESSIONAL EXPERIENCE 
+DATA SLEEK								          			          Los Angeles, CA
+Data Engineer Intern (Part-time)					   				   Summer 2025
+•	Engineered complex SQL validation logic and automated data quality checks to ensure financial metrics were aligned with business definitions, collaborating with accountants to improve accuracy in internal reporting
+•	Developed and deployed DBT models on top of Snowflake to transform raw billing data, enabling granular margin-per-client analysis and powering a new financial KPI dashboard in Tableau
+NBCUNIVERSAL MEDIA, LLC								          Los Angeles, CA
+Data Science Intern – Media Group HQ Content Science						   Summer 2025
+•	Engineered a scalable data pipeline in Python to preprocess, clean, and feature-engineer large volumes of unstructured text data for a multi-label NLP model (RoBERTa)
+•	Architected an end-to-end framework for model evaluation, automating the data flow for 15+ binary classifiers from data ingestion and cross-validation to performance metric calculation (F0.5-score)
+GRANTHAM, MAYO, VAN OTTERLOO ($60bn Asset Manager)				     	     Boston, MA
+Operation and Research Data Analyst Co-op 					             			          Fall 2023 
+●	Designed and automated ETL pipelines using Python, optimizing data validation processes, and improving data pipeline performance by reducing validation time by 20%, while collaborating with cross-functional teams to ensure efficient data flow for key business decisions
+●	Constructed efficient workflows for TCA data mapping by implementing a comprehensive set of MySQL stored procedures, reducing data entry time by 30% and improving data accuracy by 25%
+
+NATIXIS INVESTMENT MANAGERS ($1.4tn Asset Manager)					     Boston, MA
+ESG Data and Research Co-op          					                                 	         Summer/Fall 2022
+●	Analyzed ESG data from 14K+ entries and developed advanced data visualization to inform stakeholders on key performance indicators (KPIs) like carbon footprints, improving sustainability strategies and decision-making
+
+PROJECT EXPERIENCE
+Yelp ratings and National Income Analysis
+●	Built a Python-based ETL pipeline to ingest and process ~10GB of Yelp and Census data from AWS S3, using DuckDB SQL to join and transform over 2 million records for zip code–level socioeconomic analysis
+•	Performed in-depth data querying and created interactive Tableau dashboards with refined visualizations to uncover trends in cuisine diversity, pricing, and customer engagement across socioeconomic groups
+Predicting Corporate Bankruptcy with Machine Learning Model 
+●	Constructed a data processing and feature engineering pipeline using SQL and Python to clean, transform, and prepare financial statement data for a Random Forest classification model
+●	Engineered key financial ratios and industry-specific indicators as features, creating a robust dataset that led to a model with an AUC score of 0.95
+
+EDUCATION
+UCLA ANDERSON SCHOOL OF MANAGEMENT		     				           Los Angeles, CA
+Master of Science in Business Analytics (MSBA) 						 	 December 2025
+●	Optimization, Machine Learning for Decision Making, Prescriptive Models & Data Analytics, Data Visualization 
+
+
+NORTHEASTERN UNIVERSITY, D’AMORE-MCKIM SCHOOL OF BUSINESS 			      Boston, MA
+Bachelor of Science in Business Administration (Finance & Marketing Analytics), Minor in Data Science     May 2024
+●	Financial Data Analytics, Marketing Analytics, Database Design, Organizational Behavior, Business Statistics
+●	Graduated with Magna cum laude, 3.75 GPA, Dean’s List, Taiwanese American Student Association E-board 
+
