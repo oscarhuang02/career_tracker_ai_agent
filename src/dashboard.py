@@ -46,14 +46,42 @@ data = response.data
 if data:
     df = pd.DataFrame(data)
     
+    # "errors='coerce'" turns "Unknown" strings into NaT (Empty/Blank), which fixes the crash.
+    df['job_posting_date'] = pd.to_datetime(df['job_posting_date'], errors='coerce')
+    df['deadline'] = pd.to_datetime(df['deadline'], errors='coerce')
+    
+    # Get Today (normalized to midnight so 'days_left' is an integer)
+    today = pd.to_datetime("today").normalize()
+    
+    # Logic: If deadline is Missing (NaN), use Today + 5 Days
+    # We create a temporary 'effective_deadline' column for the math
+    df['effective_deadline'] = df['deadline'].fillna(today + pd.Timedelta(days=5))
+    
+    # Calculate Days Left
+    df['days_left'] = (df['effective_deadline'] - today).dt.days
+
+    # Formatter Function
+    def format_deadline(row):
+        days = int(row['days_left'])
+        # Show the date stored in effective_deadline (either real or default)
+        date_str = row['effective_deadline'].strftime('%Y-%m-%d')
+        
+        if days < 0:
+            return f"Expired ({date_str})"
+        else:
+            return f"Due in {days} days ({date_str})"
+
+    df['formatted_deadline'] = df.apply(format_deadline, axis=1)
+
     # METRICS ROW
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Applied", len(df))
-    col2.metric("Interviews", len(df[df['status'] == 'Interview']))
-    col3.metric("Rejections", len(df[df['status'] == 'Rejected']))
+    col1, col2, col3, col4, col5= st.columns(5)
+    col1.metric("Total Applied", len(df[df['status'] == 'Applied']))
+    col2.metric("Yet to Apply", len(df[df['status'] == 'Yet to Apply']))
+    col3.metric("Interviews", len(df[df['status'] == 'Interview']))
+    col4.metric("Rejections", len(df[df['status'] == 'Rejected']))
     
     yield_rate = (len(df[df['status'] == 'Interview']) / len(df)) * 100 if len(df) > 0 else 0
-    col4.metric("Yield Rate", f"{yield_rate:.1f}%")
+    col5.metric("Yield Rate", f"{yield_rate:.1f}%")
 
     # ---------------------------------------------------------
     # INTERACTIVE TABLE
@@ -63,42 +91,49 @@ if data:
 
     edited_df = st.data_editor(
         df,
-        key="job_editor", # Critical for tracking changes
+        key="job_editor",
         column_config={
             "status": st.column_config.SelectboxColumn(
                 "Status",
                 width="medium",
                 options=[
-                    "Applied",
-                    "Interview",
-                    "Rejected",
-                    "Offer",
-                    "Ghosted",
-                    "Yet to Apply"
+                    "Yet to Apply", "Applied", "Interview", 
+                    "Rejected", "Offer", "Ghosted"
                 ],
                 required=True,
             ),
-            "created_at": st.column_config.TextColumn("Posted", width = 'small'),
+            "created_at": st.column_config.TextColumn("Added On", width='small'),
             "job_url": st.column_config.LinkColumn("Link", display_text="View Job"),
-            "job_posting_date": st.column_config.TextColumn("Posted", width = 'medium'),
-            "job_description": st.column_config.TextColumn("Job Description", width='wide'),
+            "job_posting_date": st.column_config.DateColumn("Posted", width='small'),
+            
+            # NEW: formatted_deadline Configuration
+            "formatted_deadline": st.column_config.TextColumn(
+                "Deadline", 
+                width="medium"
+            ),
+            
+            "job_description": st.column_config.TextColumn("Job Description", width='large'),
         },
-        # Organize the columns neatly
+        # Organize the columns (Inserted formatted_deadline after job_posting_date)
         column_order=[
             "created_at",
             "company_name", 
             "role_title", 
             "status", 
+            "job_posting_date",
+            "formatted_deadline", 
             "role_location", 
             "job_function", 
-            "job_posting_date", 
             "job_url",
-            "job_description",
             "job_salary"
         ],
-        # Prevent editing of columns that should remain static
-        disabled=["created_at", "company_name", "role_title", "role_location", "job_url", "job_function"],
-        width='stretch',
+        # Disable editing for calculated fields
+        disabled=[
+            "created_at", "company_name", "role_title", 
+            "role_location", "job_url", "job_function", 
+            "formatted_deadline", "job_posting_date"
+        ],
+        use_container_width=True,
         hide_index=True,
     )
 

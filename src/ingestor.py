@@ -1,13 +1,15 @@
 import os
+from unittest import result
 from dotenv import load_dotenv
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field, field_validator
 from langchain_core.prompts import ChatPromptTemplate
 from src.db_config import get_db_connection
-from datetime import date
+from datetime import datetime, timedelta, date
 from typing import Literal
 from firecrawl import FirecrawlApp
+from bs4 import BeautifulSoup
 
 # Load Environment Variables
 load_dotenv()
@@ -32,6 +34,10 @@ class JobData(BaseModel):
     )
     job_description: str = Field(description="The full job description text extracted from the posting (focus on responsibilities and requirements)")
     job_salary: str = Field(description="The salary range if mentioned, else 'Not Specified'")
+
+    deadline:str = Field(description="The explicit application deadline mentioned in text (YYYY-MM-DD). " \
+    "Return None if not found.",
+        default=None)
 
 
     # VALIDATOR: Force Location Format (Python side cleaning)
@@ -72,21 +78,82 @@ def scrape_job_text(url: str):
         
     app = FirecrawlApp(api_key=api_key)
     
-    try:
-        # Pass 'formats' directly, not inside 'params'
-        scrape_result = app.scrape(url, formats=['markdown'])
-        
-        # The result might be an Object or a Dict depending on exact version
-        if isinstance(scrape_result, dict):
-            content = scrape_result.get('markdown', '') or scrape_result.get('data', {}).get('markdown', '')
-        else:
-            # If it's an object (v1.0+ standard)
-            content = getattr(scrape_result, 'markdown', '')
-
-        return content[:20000]
+    """
+    Hybrid Scraper:
+    1. Fetches Raw HTML to find hidden JSON-LD (Date/Salary).
+    2. Cleans the rest into simple text for the AI.
+    """
     
+    try:
+        print(f"🕵️‍♀️ DEBUG: Requesting Raw HTML for {url}...")
+        scrape_result = app.scrape(url, formats = ['rawHtml', 'markdown']) 
+        # ^ Note: I added 'markdown' just in case you need a fallback
+
+        # ---------------------------------------------------------
+        # ✅ V2 OBJECT COMPATIBLE EXTRACTION
+        # ---------------------------------------------------------
+        raw_html = ""
+
+        # Check if it's the v2 Document Object (What you have)
+        if hasattr(scrape_result, 'rawHtml') or hasattr(scrape_result, 'raw_html'):
+            # Try Snake Case first (standard for Python SDKs)
+            raw_html = getattr(scrape_result, 'raw_html', None)
+            
+            # If empty, try Camel Case (standard for API JSON)
+            if not raw_html:
+                raw_html = getattr(scrape_result, 'rawHtml', None)
+
+        # Fallback for dictionaries (just in case version changes)
+        elif isinstance(scrape_result, dict):
+            raw_html = scrape_result.get('rawHtml') or scrape_result.get('raw_html')
+
+        # 2. PARSE: Use BeautifulSoup to read the HTML
+        soup = BeautifulSoup(raw_html, 'html.parser')
+        
+        # --- A. SNIPER MODE: Find Hidden Metadata (Date/Salary) ---
+        extracted_meta = []
+        
+        # Look for JSON-LD (Standard for Google Jobs/LinkedIn)
+        scripts = soup.find_all('script', type='application/ld+json')
+        for script in scripts:
+            try:
+                data = json.loads(script.string)
+                # Sometimes it's a list, grab the first job posting
+                if isinstance(data, list): 
+                    data = next((item for item in data if item.get('@type') == 'JobPosting'), data[0])
+                
+                if isinstance(data, dict):
+                    if 'datePosted' in data:
+                        extracted_meta.append(f"HARD_FACT_DATE_POSTED: {data['datePosted']}")
+                    if 'baseSalary' in data:
+                        extracted_meta.append(f"HARD_FACT_SALARY: {data.get('baseSalary')}")
+            except:
+                continue
+
+        # --- B. CLEANING MODE: Strip Junk for the AI ---
+        # Remove scripts, styles, navbars, footers to save tokens
+        for element in soup(["script", "style", "nav", "footer", "header", "form"]):
+            element.decompose()
+
+        # Get clean text
+        clean_text = soup.get_text(separator="\n")
+        
+        # Limit text length to prevent token overflow (e.g. 20k chars)
+        final_content = clean_text[:20000]
+
+        # 3. COMBINE: Metadata + Content
+        final_output = f"""
+        --- HIDDEN METADATA FOUND IN HTML ---
+        {chr(10).join(extracted_meta)}
+        
+        --- JOB DESCRIPTION CONTENT ---
+        {final_content}
+        """
+        
+        return final_output
+
     except Exception as e:
-        print(f"❌ Firecrawl Failed: {e}")
+        print(f"❌ Scraping Failed: {e}")
         return None
     
 # The parser function
@@ -114,7 +181,6 @@ def parse_job_details(raw_text: str):
         2. **Industry:** If the text doesn't say the industry, USE YOUR OWN KNOWLEDGE about the company. 
            - Example: If Company is "NVIDIA", Industry = "Semiconductors".
            - Example: If Company is "Disney", Industry = "Entertainment".
-        3. **Date:** If "Posted 3 days ago", calculate the date from {today}. There has to be a data somewhere in the job description, need to extract it! If no date found, return "Unknown".
 
         TASK 2: CLASSIFY the job function into exactly one of these categories:
         - "Engineering" (Pipelines, Infrastructure, Spark, SQL heavy)
@@ -129,6 +195,17 @@ def parse_job_details(raw_text: str):
         - Separate the job description accordingly to the subtitles in the posting if any.
         - If it does not have any subtitlesjust extract the main body of the job description, organize it into paragraphs
 
+        TASK 4 EXTRACT Date and Salary using the following logic: 
+        1. Date: Look for "HARD_FACT_DATE_POSTED" at the top. If it exists, USE THAT DATE. 
+            - If not found, look for text like "Posted 3 days ago" in the description.
+            - If "Posted 3 days ago", calculate the date from {today}. There has to be a data somewhere in the job description, 
+            need to extract it! If no date found, return "Unknown".
+        2. Salary: Look for "HARD_FACT_SALARY". If it exists, parse it.
+             - If not found, look for salary ranges in the text.
+        3. Deadline (URGENCY): Look for phrases like "Applications close on...", "Deadline:", or "Expires on". 
+             - If found, format as YYYY-MM-DD.
+             - If NOT found, return None (do not guess).
+            
         JOB TEXT:
         {{text}}
         """
@@ -136,7 +213,28 @@ def parse_job_details(raw_text: str):
     
     # Run the chain
     chain = prompt | structured_llm
-    return chain.invoke({"text": raw_text})
+    result = chain.invoke({"text": raw_text}) # 1. Capture the result first
+
+    if not result.deadline:
+            try:
+                # 1. Parse the Posting Date (AI should return YYYY-MM-DD)
+                posted_dt = datetime.strptime(result.job_posting_date, "%Y-%m-%d")
+                
+                # 2. Add 14 Days (Your "Urgency Window")
+                # You can change '14' to '7' or '30' depending on how fast you want to move
+                calculated_deadline = posted_dt + timedelta(days=5)
+                
+                # 3. Update the result object
+                result.deadline = calculated_deadline.strftime("%Y-%m-%d")
+                print(f"⚡ No explicit deadline found. Auto-set to {result.deadline} (+5 days).")
+                
+            except (ValueError, TypeError):
+                # Fallback: If "job_posting_date" is weird or missing, use Today + 14 Days
+                fallback = datetime.now() + timedelta(days=5)
+                result.deadline = fallback.strftime("%Y-%m-%d")
+                print(f"⚠️ Date parsing failed. Defaulting deadline to {result.deadline}.")
+
+    return result
 
 # The main ingestor function
 def ingest_job(url: str):
