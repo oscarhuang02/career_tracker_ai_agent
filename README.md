@@ -19,7 +19,7 @@ You Manage Your Pipeline: You open the Streamlit dashboard. Here, you can view a
 ### Built With
 Frontend: Streamlit (For the interactive dashboard and tables)
 
-AI / Brains: Google Gemini Flash & LangChain (For reading and extracting text)
+AI: Google Gemini Flash & LangChain (For reading and extracting text)
 
 Scraping: Firecrawl & BeautifulSoup4 (For reading websites)
 
